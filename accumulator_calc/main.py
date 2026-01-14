@@ -156,12 +156,23 @@ class FilterConfigurations:
         if self.pack_params.return_pack_parameter(4) > 400: self.feasible = False # Inverter cannot handle input voltages > 400V.
 
 
-def calc(cell_choice, v_target, v_tolerance, p_target, p_tolerance):
+def calc(cell_name, v_target, v_tolerance, p_target, p_tolerance):
     # Calculate the number in series
     V_max, V_min = (v_target + v_tolerance), (v_target - v_tolerance)
-    Ns_max = V_max
+    Ns_max = V_max // cell_dict[cell_name]["Nominal Voltage (V)"]
+    Ns_min = V_min // cell_dict[cell_name]["Nominal Voltage (V)"]
+    Ns_options = np.linspace(Ns_min, Ns_max, 1)
 
-    # Calls the functions previously outlined
+    # Power targets in kWh -> required capaicty in Ah -> number of parallel cells required
+    P_max, P_min = (p_target + p_tolerance), (p_target - p_tolerance)
+    Np_max = (P_max*1000 / V_min) // cell_dict[cell_name]["Nominal Capacity (Ah)"]
+    Np_min = (P_min*1000 / V_max) // cell_dict[cell_name]["Nominal Capacity (Ah)"]
+    Np_options = np.linspace(Np_min, Np_max, 1)
+
+    # Design decision - number of cell segments should be either 4,5 or 6.
+    segment_options = [4,5,6]
+
+
 
 
 def main():
