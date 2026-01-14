@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
+import csv
+
 
 # Load cell selection table
 filepath = '21700_cell_options.csv'
@@ -14,6 +15,36 @@ capacity = cell_dict[cell_name]["Nominal Capacity (Ah)"]
 cont_discharge = cell_dict[cell_name]["Continuous Discharge Current (A)"]
 
 # Setup output properties
+output_file = f'ConfigOptions.csv'
+CSV_HEADERS = [
+    "Cell Name",
+    "Configuration",
+    "Pack Capacity (Ah)",
+    "Nominal Pack Voltage (V)",
+    "Max Pack Voltage (V)",
+    "Nominal Module Voltage (V)",
+    "Max Module Voltage (V)",
+    "Nominal Pack Energy (kWh)",
+    "Max Pack Energy (kWh)",
+    "Nominal Module Energy (kWh)",
+    "Max Module Energy (kWh)",
+    "Nominal Power (W)",
+    "Max Pack Current (A)",
+    "Total Cell Count",
+    "Cells per Module",
+    "Total Cell Mass (kg)",
+    "Cell Mass per Module (kg)",
+    "Total Cell Volume (L)",
+    "Cell Volume per Module (L)",
+    "Pack DCIR (Ohm)",
+    "Pack Efficiency",
+]
+
+with open(output_file, mode="w", newline="") as f:
+    writer = csv.writer(f)
+    writer.writerow(CSV_HEADERS)
+
+
 # This will be another pandas dictionary that the output configurations will be stored in
 
 '''
@@ -22,25 +53,15 @@ There will be individual dictionaries for configurations from different cell typ
 This method means a final check can be passed for all the potential configurations to elimimate potential configurations
 against the FSUK criteria 
 '''
-
-class FilterConfigurations:
-    def __init__(self, config_dict):
-        self.config_dict = config_dict # This will contain all potential pack configurations for a given cell type / voltage / energy
-
-    # FSUK specific filtering
-    def FSUK_reg_filt(self):
-        # Implement checks for number of segments / segment energy /
-
-
-
-
-class Calculate_Pack_Parameters:
+class Pack_Param_Calc:
     '''
-    This will take in the cell type, and the viable configuration, from this will calculate all required fields to populate a table with the layout
+    This will take in the cell type and a viable configuration, from this will calculate all required fields to populate a table with the layout
 
     The easiest approach for writing to the file is to have all the pack parameters laid out in the first line of the csv and for each instance write a new row
-    '''
 
+    Pack parameters can be inspected using the getter - to eliminate illegal configurations
+
+    '''
     def __init__(self, cell_name, num_series, num_parallel, num_modules, output_file):
         self.cell_name = cell_name
         self.num_series = num_series
@@ -96,7 +117,7 @@ class Calculate_Pack_Parameters:
             self.pack_DCIR,
             self.pack_efficiency]
 
-    def return_pack_parameters(self):
+    def return_pack_parameter(self, index):
         '''
         indexes for pack parameters - used when checking externally
         0   cell_name,
@@ -121,11 +142,33 @@ class Calculate_Pack_Parameters:
         19  pack approx DCIR (ohm),
         20  pack energy efficiency approximation
         '''
-        return self.data_to_write # This can be used to check individual parameters externally so invalid layouts can be discarded
+        return self.data_to_write[index] # This can be used to check individual parameters externally so invalid layouts can be discarded
 
 
-    def write_to_dataframe(self):
-        # Add row to the output file
+    def write_to_file(self):
+        with open(self.output_file, mode="a", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(self.data_to_write)
+
+
+class FilterConfigurations:
+    def __init__(self, pack_params):
+        self.pack_params = pack_params  # Instance of pack param calc class which can be inspected
+        self.feasible = True
+
+    def FSUK_reg_filt(self):
+        # checking against FSUK EV5.3.2
+        if self.pack_params.return_pack_parameter(6) > 120: self.feasible = False   # Max segment voltage = 120V
+        if self.pack_params.return_pack_parameter(8) > 6 / 3.6: self.feasible = False # Max segment energy = 6MJ (1.66666kWh)
+        if self.pack_params.return_pack_parameter(16) > 12: self.feasible = False # Max segment mass = 12kg - this is for the full segment so total cell mass alone cant even be close to this
+
+        # checking against FSUK EV4.1.1
+        if self.pack_params.return_pack_parameter(4) > 600: self.feasible = False
+
+
+    def UGR_limitations(self):
+        # Unitek Bamocar D3 400V/400A inverter limits potential configuration options
+        if self.pack_params.return_pack_parameter(4) > 400: self.feasible = False # Inverter cannot handle input voltages > 400V.
 
 
 
