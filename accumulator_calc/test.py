@@ -14,7 +14,7 @@ def calc(cell_name, v_target, v_tolerance, e_target_kWh, e_tolerance_kWh):
     V_cell = np.float64(cell["Maximum Nominal Voltage (V)"])
     Ah_cell = np.float64(cell["Nominal Capacity (Ah)"])
 
-    # Voltage window
+    # Range of acceptable pack voltages
     V_max = v_target + v_tolerance
     V_min = v_target - v_tolerance
 
@@ -22,18 +22,18 @@ def calc(cell_name, v_target, v_tolerance, e_target_kWh, e_tolerance_kWh):
     Ns_max = math.floor(V_max / V_cell)
     print("Ns min:", Ns_min)
     print("Ns max:", Ns_max)
-    Ns_options = np.arange(Ns_min, Ns_max + 1)
+    Ns_options = np.arange(Ns_min, Ns_max + 1, step=1)
 
-    # Energy window (kWh → Wh)
+    # Range of acceptable pack energies
     E_max = (e_target_kWh + e_tolerance_kWh) * 1000
     E_min = (e_target_kWh - e_tolerance_kWh) * 1000
 
-    # Required Ah = Energy / Voltage
+    # Power targets in kWh -> required capaicty in Ah -> number of parallel cells required
     Np_min = math.ceil(E_min / (V_max * Ah_cell))
     print("Np min:", Np_min)
     Np_max = math.floor(E_max / (V_min * Ah_cell))
     print("Np max:", Np_max)
-    Np_options = np.arange(Np_min, Np_max + 1)
+    Np_options = np.arange(Np_min, Np_max + 1, step=1)
 
     # Segment constraint
     segment_options = [4, 5, 6]
