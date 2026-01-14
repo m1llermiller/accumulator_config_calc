@@ -2,16 +2,15 @@ import numpy as np
 import pandas as pd
 import csv
 
-
 # Load cell selection table
 filepath = '21700_cell_options.csv'
 df_raw = pd.read_csv(filepath, sep="\t", index_col=0)
 df_cells = df_raw.T
 cell_dict = df_cells.to_dict(orient="index")
 
-# Setup output properties
+# Setup output file for calculated pack properties
 output_file = f'ConfigOptions.csv'
-CSV_HEADERS = [
+output_header = [
     "Cell Name",
     "Configuration",
     "Pack Capacity (Ah)",
@@ -37,15 +36,8 @@ CSV_HEADERS = [
 
 with open(output_file, mode="w", newline="") as f:
     writer = csv.writer(f)
-    writer.writerow(CSV_HEADERS)
+    writer.writerow(output_header)
 
-
-'''
-There will be individual dictionaries for configurations from different cell types
-
-This method means a final check can be passed for all the potential configurations to elimimate potential configurations
-against the FSUK criteria 
-'''
 class Pack_Param_Calc:
     '''
     This will take in the cell type and a viable configuration, from this will calculate all required fields to populate a table with the layout
@@ -163,6 +155,32 @@ class FilterConfigurations:
         # Unitek Bamocar D3 400V/400A inverter limits potential configuration options
         if self.pack_params.return_pack_parameter(4) > 400: self.feasible = False # Inverter cannot handle input voltages > 400V.
 
+
+def calc(cell_choice, v_target, v_tolerance, p_target, p_tolerance):
+    # Calculate the number in series
+    V_max, V_min = (v_target + v_tolerance), (v_target - v_tolerance)
+    Ns_max = V_max
+
+    # Calls the functions previously outlined
+
+
+def main():
+
+
+    main_menu_text = f'---- Pack Configuration Generator ----\n[1]\tAdd accumulator config options\n[2]\tSave and exit'
+    while True:
+        selection = int(input(main_menu_text))
+        if selection == 1:
+            print(f'Cell choices avaliable: ')
+            # This should print the cells that have been imported
+            cell_choice = input('Cell choice: ')
+            v_target = input('Desired pack voltage (V):\t')
+            v_tolerance = input('Permissable deviation from target pack voltage (V):\t')
+            p_target = input('Desired pack energy (kWh):\t')
+            p_tolerance = input('Permissable deviation from target pack energy (kWh):\t')
+
+        elif selection == 2: break
+        else: pass
 
 
 

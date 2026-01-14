@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-import csv
 
 # Load cell selection table
 filepath = '21700_cell_options.csv'
@@ -8,172 +7,17 @@ df_raw = pd.read_csv(filepath, sep="\t", index_col=0)
 df_cells = df_raw.T
 cell_dict = df_cells.to_dict(orient="index")
 
-# Setup output file for calculated pack properties
-output_file = f'ConfigOptions.csv'
-output_header = [
-    "Cell Name",
-    "Configuration",
-    "Pack Capacity (Ah)",
-    "Nominal Pack Voltage (V)",
-    "Max Pack Voltage (V)",
-    "Nominal Module Voltage (V)",
-    "Max Module Voltage (V)",
-    "Nominal Pack Energy (kWh)",
-    "Max Pack Energy (kWh)",
-    "Nominal Module Energy (kWh)",
-    "Max Module Energy (kWh)",
-    "Nominal Power (W)",
-    "Max Pack Current (A)",
-    "Total Cell Count",
-    "Cells per Module",
-    "Total Cell Mass (kg)",
-    "Cell Mass per Module (kg)",
-    "Total Cell Volume (L)",
-    "Cell Volume per Module (L)",
-    "Pack DCIR (Ohm)",
-    "Pack Efficiency",
-]
 
-with open(output_file, mode="w", newline="") as f:
-    writer = csv.writer(f)
-    writer.writerow(output_header)
+V_target = 350 # Target specified in terms of nominal pack voltage
+V_tolerance = 25
+P_taget = 25 #kWh
+P_tolerance = 3 #kWh
 
-class Pack_Param_Calc:
-    '''
-    This will take in the cell type and a viable configuration, from this will calculate all required fields to populate a table with the layout
+def calc(cell_name, v_target, v_tolerance, p_target, p_tolerance):
+    # Calculate the number in series
+    V_max, V_min = (v_target + v_tolerance), (v_target - v_tolerance)
+    cell_dict[cell_name]["Nominal Voltage (V)"]
 
-    The easiest approach for writing to the file is to have all the pack parameters laid out in the first line of the csv and for each instance write a new row
+    min_ser = V_target
 
-    Pack parameters can be inspected using the getter - to eliminate illegal configurations
-
-    '''
-    def __init__(self, cell_name, num_series, num_parallel, num_modules, output_file):
-        self.cell_name = cell_name
-        self.num_series = num_series
-        self.num_parallel = num_parallel
-        self.num_modules = num_modules
-        self.output_file = output_file
-
-        # Calculate pack parameters from inputs
-        self.configuration = f'{num_series/num_modules}s{num_parallel}p\t{num_modules}s'
-        self.Q_pack = num_parallel * cell_dict[cell_name]["Nominal Capacity (Ah)"]  # V
-        self.nom_pack_v = num_series * cell_dict[cell_name]["Nominal Voltage (V)"]  # V
-        self.max_pack_v = num_series * cell_dict[cell_name]["Max Voltage (V)"]  # V
-        self.nom_mod_v = self.nom_pack_v / num_modules  # V
-        self.max_mod_v = self.max_pack_v / num_modules  # V
-        self.nom_pack_e = self.nom_pack_v * self.Q_pack /1000   # kWh
-        self.max_pack_e = self.max_pack_v * self.Q_pack /1000   # kWh
-        self.nom_mod_e = self.nom_mod_v * self.Q_pack /1000     # kWh
-        self.max_mod_e = self.max_mod_v * self.Q_pack /1000     # kWh
-        self.cont_pack_i = num_parallel * cell_dict[cell_name]["Continuous Discharge Current (A)"]  # A
-        self.num_cells = num_parallel * num_series
-        self.mod_num_cells = self.num_cells / num_modules
-        self.cell_mass = self.num_cells * cell_dict[cell_name]["Mass (g)"] / 1000   # kg
-        self.mod_cell_mass = self.cell_mass / num_modules   # kg
-        self.cell_volume = cell_dict[cell_name]["Volume (L)"] * self.num_cells  # L
-        self.mod_volume = self.cell_volume / num_modules    # L
-
-        self.pack_DCIR = ((cell_dict[cell_name]["Typical DCIR (mohm)"]*num_series)/num_parallel)*1000 # Ohms
-        p_loss = np.square(self.cont_pack_i) * self.pack_DCIR # This is an approximated power loss when operating at nominal values
-        self.nom_power = self.nom_pack_v * self.cont_pack_i
-        self.pack_efficiency = (self.nom_power - p_loss) / self.nom_power
-
-
-        self.data_to_write = [
-            self.cell_name,
-            self.configuration,
-            self.Q_pack,
-            self.nom_pack_v,
-            self.max_pack_v,
-            self.nom_mod_v,
-            self.max_mod_v,
-            self.nom_pack_e,
-            self.max_pack_e,
-            self.nom_mod_e,
-            self.max_mod_e,
-            self.nom_power,
-            self.cont_pack_i,
-            self.num_cells,
-            self.mod_num_cells,
-            self.cell_mass,
-            self.mod_cell_mass ,
-            self.cell_volume,
-            self.mod_volume,
-            self.pack_DCIR,
-            self.pack_efficiency]
-
-    def return_pack_parameter(self, index):
-        '''
-        indexes for pack parameters - used when checking externally
-        0   cell_name,
-        1   pack configuration (series / parallel and number of modules),
-        2   pack capacity (Ah),
-        3   nominal pack voltage (V),
-        4   maximum pack voltage (V),
-        5   nominal module voltage (V),
-        6   maximum module voltage (V),
-        7   nominal pack energy (kWh),
-        8   maximum pack energy (kWh),
-        9   nominal module energy (kWh),
-        10  maximum module energy (kWh),
-        11  nominal power output (W) - from nominal voltage and continuous rated current,
-        12  continuous rated current (A),
-        13  number of cells
-        14  number of cells per module,
-        15  cell mass (kg),
-        16  cell mass per module (kg),
-        17  cell volume (L),
-        18  cell module volume (L),
-        19  pack approx DCIR (ohm),
-        20  pack energy efficiency approximation
-        '''
-        return self.data_to_write[index] # This can be used to check individual parameters externally so invalid layouts can be discarded
-
-
-    def write_to_file(self):
-        with open(self.output_file, mode="a", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(self.data_to_write)
-
-
-class FilterConfigurations:
-    def __init__(self, pack_params):
-        self.pack_params = pack_params  # Instance of pack param calc class which can be inspected
-        self.feasible = True
-
-    def FSUK_reg_filt(self):
-        # checking against FSUK EV5.3.2
-        if self.pack_params.return_pack_parameter(6) > 120: self.feasible = False   # Max segment voltage = 120V
-        if self.pack_params.return_pack_parameter(8) > 6 / 3.6: self.feasible = False # Max segment energy = 6MJ (1.66666kWh)
-        if self.pack_params.return_pack_parameter(16) > 12: self.feasible = False # Max segment mass = 12kg - this is for the full segment so total cell mass alone cant even be close to this
-
-        # checking against FSUK EV4.1.1
-        if self.pack_params.return_pack_parameter(4) > 600: self.feasible = False
-
-
-    def UGR_limitations(self):
-        # Unitek Bamocar D3 400V/400A inverter limits potential configuration options
-        if self.pack_params.return_pack_parameter(4) > 400: self.feasible = False # Inverter cannot handle input voltages > 400V.
-
-
-def calc()
-
-def main():
-
-
-    main_menu_text = f'---- Pack Configuration Generator ----\n[1]\tAdd accumulator config options\n[2]\tSave and exit'
-    while True:
-        selection = int(input(main_menu_text))
-        if selection == 1:
-            print(f'Cell choices avaliable: ')
-            cell_choice = input('Cell choice: ')
-            v_target = input('Desired pack voltage (V):\t')
-            v_tolerance = input('Permissable deviation from target pack voltage (V):\t')
-            p_target = input('Desired pack energy (kWh):\t')
-            p_tolerance = input('Permissable deviation from target pack energy (kWh):\t')
-
-        elif selection == 2: break
-        else: pass
-
-
-
+    # Calls the functions previously outlined
