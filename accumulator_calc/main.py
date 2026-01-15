@@ -25,7 +25,7 @@ output_header = [
     "Max Pack Energy (kWh)",
     "Nominal Module Energy (kWh)",
     "Max Module Energy (kWh)",
-    "Nominal Power (W)",
+    "Nominal Power (kW)",
     "Cont Pack Current (A)",
     "Total Cell Count",
     "Cells per Module",
@@ -34,7 +34,10 @@ output_header = [
     "Total Cell Volume (L)",
     "Cell Volume per Module (L)",
     "Pack DCIR (Ohm)",
-    "Pack Efficiency",
+    "Approximated Power Efficiency (%)",
+    "Series Cells per Module (#)",
+    "Parallel Cells (#)",
+    "Number of Modules (#)",
 ]
 
 with open(output_file, mode="w", newline="") as f:
@@ -59,8 +62,8 @@ class Pack_Param_Calc:
         self.output_file = output_file
 
         # Calculate pack parameters from inputs
-        cells_per_module = num_series // num_modules # ensure value printed as integer
-        self.configuration = f'{cells_per_module}s{num_parallel}p × {num_modules} modules'
+        self.cells_per_module = num_series // num_modules # ensure value printed as integer
+        self.configuration = f'{self.cells_per_module}s{num_parallel}p, {num_modules}s'
         self.Q_pack = num_parallel * float(cell_dict[cell_name]["Nominal Capacity (Ah)"])  # V
         self.nom_pack_v = num_series * float(cell_dict[cell_name]["Nominal Voltage (V)"])  # V
         self.max_pack_v = num_series * float(cell_dict[cell_name]["Maximum Voltage (V)"])  # V
@@ -77,11 +80,13 @@ class Pack_Param_Calc:
         self.mod_cell_mass = self.cell_mass / num_modules   # kg
         self.cell_volume = float(cell_dict[cell_name]["Volume (L)"]) * self.num_cells  # L
         self.mod_volume = self.cell_volume / num_modules    # L
-        self.pack_DCIR = (float(cell_dict[cell_name]["Typical DCIR (mohm)"]) * num_series / num_parallel) * 1000
-        p_loss = np.square(self.cont_pack_i) * self.pack_DCIR # This is an approximated power loss when operating at nominal values
-        self.nom_power = self.nom_pack_v * self.cont_pack_i
-        self.pack_efficiency = (self.nom_power - p_loss) / self.nom_power
 
+        # Estimate the pack efficiency from the DCIR and output power capability
+        cell_DCIR = float(cell_dict[cell_name]["Typical DCIR (mohm)"]) * 0.001  # convert to ohm
+        self.pack_DCIR = (cell_DCIR * num_series) / num_parallel
+        p_loss_kW = (self.cont_pack_i ** 2 * self.pack_DCIR)/1000  # I2R losses from continual current through pack resistance
+        self.nom_power = self.nom_pack_v * self.cont_pack_i / 1000  # kW
+        self.pack_efficiency = (self.nom_power - p_loss_kW) / self.nom_power
 
         self.data_to_write = [
             self.cell_name,
@@ -104,7 +109,10 @@ class Pack_Param_Calc:
             self.cell_volume,
             self.mod_volume,
             self.pack_DCIR,
-            self.pack_efficiency]
+            self.pack_efficiency,
+            self.cells_per_module,
+            self.num_parallel,
+            self.num_modules,]
 
     def return_pack_parameter(self, index):
         '''
@@ -129,7 +137,7 @@ class Pack_Param_Calc:
         17  cell volume (L),
         18  cell module volume (L),
         19  pack approx DCIR (ohm),
-        20  pack energy efficiency approximation
+        20  pack power efficiency approximation
         '''
         return self.data_to_write[index] # This can be used to check individual parameters externally so invalid layouts can be discarded
 
@@ -149,10 +157,8 @@ class FilterConfigurations:
     def FSUK_reg_filt(self):
         # checking against FSUK EV5.3.2
         if self.pack_params.return_pack_parameter(6) > 120: self.feasible = False   # Max segment voltage = 120V
-        print(self.feasible)
-        if self.pack_params.return_pack_parameter(8) > 6 / 3.6: self.feasible = False # Max segment energy = 6MJ (1.66666kWh)
+        if self.pack_params.return_pack_parameter(10) > 6 / 3.6: self.feasible = False # Max segment energy = 6MJ (1.66666kWh)
         if self.pack_params.return_pack_parameter(16) > 12: self.feasible = False # Max segment mass = 12kg - this is for the full segment so total cell mass alone cant even be close to this
-
         # checking against FSUK EV4.1.1
         if self.pack_params.return_pack_parameter(4) > 600: self.feasible = False
 
@@ -222,10 +228,10 @@ def main():
             print(", ".join(cell_dict.keys()))
             # This should print the cells that have been imported
             cell_choice = input('Cell choice: ')
-            v_target = float(input('Desired pack voltage (V):\t'))
+            v_target = float(input('Desired nominal pack voltage (V):\t'))
             v_tolerance = float(input('Permissible deviation from target pack voltage (V):\t'))
-            p_target = float(input('Desired pack energy (kWh):\t'))
-            p_tolerance = float(input('Permissible deviation from target pack energy (kWh):\t'))
+            p_target = float(input('Desired pack energy (MJ):\t'))/3.6 # Further calculations done in terms of kWh
+            p_tolerance = float(input('Permissible deviation from target pack energy (MJ):\t'))/3.6
 
             config_options = calc(cell_choice, v_target, v_tolerance, p_target, p_tolerance)
             for potential_config in config_options:
