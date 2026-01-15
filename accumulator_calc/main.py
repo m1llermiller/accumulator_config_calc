@@ -1,15 +1,18 @@
 import numpy as np
 import pandas as pd
+import math
 import csv
+from datetime import datetime
 
 # Load cell selection table
 filepath = '21700_cell_options.csv'
-df_raw = pd.read_csv(filepath, sep="\t", index_col=0)
+df_raw = pd.read_csv(filepath, sep=",", index_col=0)
 df_cells = df_raw.T
 cell_dict = df_cells.to_dict(orient="index")
 
 # Setup output file for calculated pack properties
-output_file = f'ConfigOptions.csv'
+timestamp = datetime.now().strftime("%H%M") # Unique identifier for generated combinations
+output_file = f'ConfigOptions_{timestamp}.csv'
 output_header = [
     "Cell Name",
     "Configuration",
@@ -23,7 +26,7 @@ output_header = [
     "Nominal Module Energy (kWh)",
     "Max Module Energy (kWh)",
     "Nominal Power (W)",
-    "Max Pack Current (A)",
+    "Cont Pack Current (A)",
     "Total Cell Count",
     "Cells per Module",
     "Total Cell Mass (kg)",
@@ -48,6 +51,7 @@ class Pack_Param_Calc:
 
     '''
     def __init__(self, cell_name, num_series, num_parallel, num_modules, output_file):
+        print(cell_name, num_series, num_parallel, num_modules)
         self.cell_name = cell_name
         self.num_series = num_series
         self.num_parallel = num_parallel
@@ -55,25 +59,25 @@ class Pack_Param_Calc:
         self.output_file = output_file
 
         # Calculate pack parameters from inputs
-        self.configuration = f'{num_series/num_modules}s{num_parallel}p\t{num_modules}s'
-        self.Q_pack = num_parallel * cell_dict[cell_name]["Nominal Capacity (Ah)"]  # V
-        self.nom_pack_v = num_series * cell_dict[cell_name]["Nominal Voltage (V)"]  # V
-        self.max_pack_v = num_series * cell_dict[cell_name]["Max Voltage (V)"]  # V
+        cells_per_module = num_series // num_modules # ensure value printed as integer
+        self.configuration = f'{cells_per_module}s{num_parallel}p × {num_modules} modules'
+        self.Q_pack = num_parallel * float(cell_dict[cell_name]["Nominal Capacity (Ah)"])  # V
+        self.nom_pack_v = num_series * float(cell_dict[cell_name]["Nominal Voltage (V)"])  # V
+        self.max_pack_v = num_series * float(cell_dict[cell_name]["Maximum Voltage (V)"])  # V
         self.nom_mod_v = self.nom_pack_v / num_modules  # V
         self.max_mod_v = self.max_pack_v / num_modules  # V
         self.nom_pack_e = self.nom_pack_v * self.Q_pack /1000   # kWh
         self.max_pack_e = self.max_pack_v * self.Q_pack /1000   # kWh
         self.nom_mod_e = self.nom_mod_v * self.Q_pack /1000     # kWh
         self.max_mod_e = self.max_mod_v * self.Q_pack /1000     # kWh
-        self.cont_pack_i = num_parallel * cell_dict[cell_name]["Continuous Discharge Current (A)"]  # A
+        self.cont_pack_i = num_parallel * float(cell_dict[cell_name]["Continuous Discharge Current (A)"])  # A
         self.num_cells = num_parallel * num_series
         self.mod_num_cells = self.num_cells / num_modules
-        self.cell_mass = self.num_cells * cell_dict[cell_name]["Mass (g)"] / 1000   # kg
+        self.cell_mass = self.num_cells * float(cell_dict[cell_name]["Mass (g)"]) / 1000   # kg
         self.mod_cell_mass = self.cell_mass / num_modules   # kg
-        self.cell_volume = cell_dict[cell_name]["Volume (L)"] * self.num_cells  # L
+        self.cell_volume = float(cell_dict[cell_name]["Volume (L)"]) * self.num_cells  # L
         self.mod_volume = self.cell_volume / num_modules    # L
-
-        self.pack_DCIR = ((cell_dict[cell_name]["Typical DCIR (mohm)"]*num_series)/num_parallel)*1000 # Ohms
+        self.pack_DCIR = (float(cell_dict[cell_name]["Typical DCIR (mohm)"]) * num_series / num_parallel) * 1000
         p_loss = np.square(self.cont_pack_i) * self.pack_DCIR # This is an approximated power loss when operating at nominal values
         self.nom_power = self.nom_pack_v * self.cont_pack_i
         self.pack_efficiency = (self.nom_power - p_loss) / self.nom_power
@@ -131,6 +135,7 @@ class Pack_Param_Calc:
 
 
     def write_to_file(self):
+        print(f'Writing to file: {self.data_to_write[1]}')
         with open(self.output_file, mode="a", newline="") as f:
             writer = csv.writer(f)
             writer.writerow(self.data_to_write)
@@ -144,6 +149,7 @@ class FilterConfigurations:
     def FSUK_reg_filt(self):
         # checking against FSUK EV5.3.2
         if self.pack_params.return_pack_parameter(6) > 120: self.feasible = False   # Max segment voltage = 120V
+        print(self.feasible)
         if self.pack_params.return_pack_parameter(8) > 6 / 3.6: self.feasible = False # Max segment energy = 6MJ (1.66666kWh)
         if self.pack_params.return_pack_parameter(16) > 12: self.feasible = False # Max segment mass = 12kg - this is for the full segment so total cell mass alone cant even be close to this
 
@@ -155,43 +161,85 @@ class FilterConfigurations:
         # Unitek Bamocar D3 400V/400A inverter limits potential configuration options
         if self.pack_params.return_pack_parameter(4) > 400: self.feasible = False # Inverter cannot handle input voltages > 400V.
 
+    def return_check(self):
+        return self.feasible
 
-def calc(cell_name, v_target, v_tolerance, p_target, p_tolerance):
-    # Calculate the number in series
-    V_max, V_min = (v_target + v_tolerance), (v_target - v_tolerance)
-    Ns_max = V_max // cell_dict[cell_name]["Nominal Voltage (V)"]
-    Ns_min = V_min // cell_dict[cell_name]["Nominal Voltage (V)"]
-    Ns_options = np.linspace(Ns_min, Ns_max, 1)
 
-    # Power targets in kWh -> required capaicty in Ah -> number of parallel cells required
-    P_max, P_min = (p_target + p_tolerance), (p_target - p_tolerance)
-    Np_max = (P_max*1000 / V_min) // cell_dict[cell_name]["Nominal Capacity (Ah)"]
-    Np_min = (P_min*1000 / V_max) // cell_dict[cell_name]["Nominal Capacity (Ah)"]
-    Np_options = np.linspace(Np_min, Np_max, 1)
+def calc(cell_name, v_target, v_tolerance, e_target_kWh, e_tolerance_kWh):
+    potential_configs = [] # To be populated by (num_series, num_parallel, num_segments)
 
-    # Design decision - number of cell segments should be either 4,5 or 6.
-    segment_options = [4,5,6]
+    cell = cell_dict[cell_name]
+    V_cell = np.float64(cell["Nominal Voltage (V)"])
+    Ah_cell = np.float64(cell["Nominal Capacity (Ah)"])
+
+    # Range of acceptable pack voltages
+    V_max = v_target + v_tolerance
+    V_min = v_target - v_tolerance
+
+    Ns_min = math.ceil(V_min / V_cell)
+    Ns_max = math.floor(V_max / V_cell)
+
+    # Range of acceptable series cell configurations
+    Ns_options = np.arange(Ns_min, Ns_max + 1, step=1)
+
+    # only designing for packs with between 4 and 7 segments
+    segment_options = [4, 5, 6, 7]
+
+    # Keep only the series combinations that permit division into equal cell segments
+    Ns_options = [Ns for Ns in Ns_options if any(Ns % seg == 0 for seg in segment_options)]
+
+    # Finding the subsequent required parallel cells to build to the desired capacity
+
+    # Range of acceptable pack energies
+    E_max = (e_target_kWh + e_tolerance_kWh) * 1000 # Wh
+    E_min = (e_target_kWh - e_tolerance_kWh) * 1000 # Wh
+
+    # to generate the parallel cell combinations
+    for Ns in Ns_options:
+        for seg in segment_options:
+            if Ns % seg == 0:
+                Np_min = math.ceil(E_min / (Ns*V_cell * Ah_cell))
+                Np_max = math.floor(E_max / (Ns*V_cell * Ah_cell))
+                Np_options = np.arange(Np_min, Np_max + 1, step=1)
+
+                for Np in Np_options:
+                    config = (cell_name, Ns, Np, seg)
+                    potential_configs.append(config)
+            else:
+                pass # for series combinations where it can't be divided into the given number of segments
+
+    return potential_configs
 
 
 
 
 def main():
-
-
-    main_menu_text = f'---- Pack Configuration Generator ----\n[1]\tAdd accumulator config options\n[2]\tSave and exit'
+    main_menu_text = f'---- Pack Configuration Generator ----\n[1]\tAdd accumulator config options\n[2]\tSave and exit\n>>>\t'
     while True:
         selection = int(input(main_menu_text))
         if selection == 1:
-            print(f'Cell choices avaliable: ')
+            print(f'Cell choices available: ')
+            print(", ".join(cell_dict.keys()))
             # This should print the cells that have been imported
             cell_choice = input('Cell choice: ')
-            v_target = input('Desired pack voltage (V):\t')
-            v_tolerance = input('Permissable deviation from target pack voltage (V):\t')
-            p_target = input('Desired pack energy (kWh):\t')
-            p_tolerance = input('Permissable deviation from target pack energy (kWh):\t')
+            v_target = float(input('Desired pack voltage (V):\t'))
+            v_tolerance = float(input('Permissible deviation from target pack voltage (V):\t'))
+            p_target = float(input('Desired pack energy (kWh):\t'))
+            p_tolerance = float(input('Permissible deviation from target pack energy (kWh):\t'))
+
+            config_options = calc(cell_choice, v_target, v_tolerance, p_target, p_tolerance)
+            for potential_config in config_options:
+                paramCalc = Pack_Param_Calc(potential_config[0], potential_config[1], potential_config[2], potential_config[3], output_file)
+                filter = FilterConfigurations(paramCalc)
+                filter.FSUK_reg_filt()
+                filter.UGR_limitations()
+                if filter.return_check() == True:
+                    paramCalc.write_to_file()
+                else:
+                    pass
 
         elif selection == 2: break
         else: pass
 
-
-
+if __name__ == "__main__":
+    main()
