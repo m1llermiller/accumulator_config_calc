@@ -5,13 +5,8 @@ Program flow from user perspective:
 * All potential accumulator configurations for the given cell choice are taken - all viable configurations are output onto a spreadsheet
 * Additional rules (for FSUK compliance) can then be tested against for each configuration
 
-Requirements for the program:
-* Efficient use of pandas dictionaries
-* Writing to external files
-* Perhaps as an extension build into a GUI
-
 Unlike the excel spreadsheet version of this program, all calculations will be based purely on the cells - not the cells within the ENEPAQ style strips.
 This program is purely to represent the cumulative properties of the cells - not the accumulator as a whole. 
 
-ASSUMPTION FOR THIS PROGRAM IS THAT ALL CELL MODULES WILL BE IN SERIES
+Assumption for this program is that all the cell modules will be placed in series. 
 
