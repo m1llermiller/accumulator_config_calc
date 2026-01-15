@@ -1,4 +1,4 @@
-# accumulator_config_calc
+# Accumulator Config Generator
 
 Program flow from user perspective:
 * Selects a cell type, selects target voltage and voltage tolerance, selects energy target and energy tolerance
