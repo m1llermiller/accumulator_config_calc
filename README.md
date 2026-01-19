@@ -6,7 +6,7 @@ Program flow from user perspective:
 * Additional rules (for FSUK compliance) can then be tested against for each configuration
 
 Unlike the excel spreadsheet version of this program, all calculations will be based purely on the cells - not the cells within the ENEPAQ style strips.
-This program is purely to represent the cumulative properties of the cells - not the accumulator as a whole. 
+This program is purely to represent the cumulative properties of the cells - not accounting for the mechanical construction of accumulator as a whole. 
 
 Assumption for this program is that all the cell modules will be placed in series. 
 
