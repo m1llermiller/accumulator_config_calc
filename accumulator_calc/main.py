@@ -19,40 +19,38 @@ output_header = [
     "Pack Capacity (Ah)",
     "Nominal Pack Voltage (V)",
     "Max Pack Voltage (V)",
-    "Nominal Module Voltage (V)",
-    "Max Module Voltage (V)",
     "Nominal Pack Energy (kWh)",
     "Max Pack Energy (kWh)",
+    "Cont Pack Current (A)",
+    "Nominal Power (kW)",
+
+    "Nominal Module Voltage (V)",
+    "Max Module Voltage (V)",
     "Nominal Module Energy (kWh)",
     "Max Module Energy (kWh)",
-    "Nominal Power (kW)",
-    "Cont Pack Current (A)",
-    "Total Cell Count",
-    "Cells per Module",
+    "Number of Modules (#)",
+    "Series Cells per Module (#)",
+    "Parallel Cells (#)",
+
+    "Total Cell Count (#)",
     "Total Cell Mass (kg)",
     "Cell Mass per Module (kg)",
     "Total Cell Volume (L)",
     "Cell Volume per Module (L)",
     "Pack DCIR (Ohm)",
     "Approximated Power Efficiency (%)",
-    "Series Cells per Module (#)",
-    "Parallel Cells (#)",
-    "Number of Modules (#)",
+    "Approximated Connector Mass (kg)"
 ]
 
 with open(output_file, mode="w", newline="") as f:
     writer = csv.writer(f)
     writer.writerow(output_header)
 
-
 class Pack_Param_Calc:
     '''
-    This will take in the cell type and a viable configuration, from this will calculate all required fields to populate a table with the layout
-
-    The easiest approach for writing to the file is to have all the pack parameters laid out in the first line of the csv and for each instance write a new row
+    This will take in the cell type and a viable configuration, from this will calculate subsequent pack parameters
 
     Pack parameters can be inspected using the getter - to eliminate illegal configurations
-
     '''
 
     def __init__(self, cell_name, num_series, num_parallel, num_modules, output_file):
@@ -65,22 +63,33 @@ class Pack_Param_Calc:
 
         self.param_calc()  # Initialises calculated variables
 
+        power_requirement_kw = 80 # Assuming the pack will be running at the highest possible power
+        self.copper_calc(80) # Estimates mass of tractive system connections based on the current ratings
+        self.format_results()
+
     def param_calc(self):
         # Calculate pack parameters from inputs
-        self.cells_per_module = self.num_series // self.num_modules  # ensure value printed as integer
-        self.configuration = f'{self.cells_per_module}s{self.num_parallel}p, {self.num_modules}s'
+
+        self.series_cells_per_module = self.num_series // self.num_modules  # ensure value printed as integer - SERIES Cells per module
+
+        self.configuration = f'{self.series_cells_per_module}s{self.num_parallel}p, {self.num_modules}s'
         self.Q_pack = self.num_parallel * float(cell_dict[self.cell_name]["Nominal Capacity (Ah)"])  # V
         self.nom_pack_v = self.num_series * float(cell_dict[self.cell_name]["Nominal Voltage (V)"])  # V
         self.max_pack_v = self.num_series * float(cell_dict[self.cell_name]["Maximum Voltage (V)"])  # V
-        self.nom_mod_v = self.nom_pack_v / self.num_modules  # V
-        self.max_mod_v = self.max_pack_v / self.num_modules  # V
         self.nom_pack_e = self.nom_pack_v * self.Q_pack / 1000  # kWh
         self.max_pack_e = self.max_pack_v * self.Q_pack / 1000  # kWh
+
+        self.cont_pack_i = self.num_parallel * float(cell_dict[self.cell_name]["Continuous Discharge Current (A)"])  # A
+        self.nom_power = self.nom_pack_v * self.cont_pack_i / 1000  # kW
+
+        # Cell Module properties
+        self.nom_mod_v = self.nom_pack_v / self.num_modules  # V
+        self.max_mod_v = self.max_pack_v / self.num_modules  # V
         self.nom_mod_e = self.nom_mod_v * self.Q_pack / 1000  # kWh
         self.max_mod_e = self.max_mod_v * self.Q_pack / 1000  # kWh
-        self.cont_pack_i = self.num_parallel * float(cell_dict[self.cell_name]["Continuous Discharge Current (A)"])  # A
         self.num_cells = self.num_parallel * self.num_series
-        self.mod_num_cells = self.num_cells / self.num_modules
+
+        # Physical properties
         self.cell_mass = self.num_cells * float(cell_dict[self.cell_name]["Mass (g)"]) / 1000  # kg
         self.mod_cell_mass = self.cell_mass / self.num_modules  # kg
         self.cell_volume = float(cell_dict[self.cell_name]["Volume (L)"]) * self.num_cells  # L
@@ -91,36 +100,39 @@ class Pack_Param_Calc:
         self.pack_DCIR = (cell_DCIR * self.num_series) / self.num_parallel
         p_loss_kW = (
                                 self.cont_pack_i ** 2 * self.pack_DCIR) / 1000  # I2R losses from continual current through pack resistance
-        self.nom_power = self.nom_pack_v * self.cont_pack_i / 1000  # kW
+
         self.pack_efficiency = (self.nom_power - p_loss_kW) / self.nom_power
 
-        ############# FIX this to package into sub_arrays which will make passing parameters between easier
-
+    def format_results(self):
+        # Once the other functions have been called and the data is all initialised, this formats the data into an output array
         self.data_to_write = [
+            # Pack properties
             self.cell_name,
             self.configuration,
             self.Q_pack,
             self.nom_pack_v,
             self.max_pack_v,
-            self.nom_mod_v,
-            self.max_mod_v,
             self.nom_pack_e,
             self.max_pack_e,
+            self.cont_pack_i,
+            self.nom_power,
+            # Cell Module properties
+            self.nom_mod_v,
+            self.max_mod_v,
             self.nom_mod_e,
             self.max_mod_e,
-            self.nom_power,
-            self.cont_pack_i,
+            self.num_modules,
+            self.series_cells_per_module,
+            self.num_parallel,
+            # Physical properties
             self.num_cells,
-            self.mod_num_cells,
             self.cell_mass,
             self.mod_cell_mass,
             self.cell_volume,
             self.mod_volume,
             self.pack_DCIR,
             self.pack_efficiency,
-            self.cells_per_module,  # REDUNDANT - check that removing this doesnt break anything .
-            self.num_parallel,
-            self.num_modules, ]
+            self.TS_connection_mass_kg]
 
     def return_pack_parameter(self, index):
         '''
@@ -130,30 +142,31 @@ class Pack_Param_Calc:
         2   pack capacity (Ah),
         3   nominal pack voltage (V),
         4   maximum pack voltage (V),
-        5   nominal module voltage (V),
-        6   maximum module voltage (V),
-        7   nominal pack energy (kWh),
-        8   maximum pack energy (kWh),
-        9   nominal module energy (kWh),
-        10  maximum module energy (kWh),
-        11  nominal power output (W) - from nominal voltage and continuous rated current,
-        12  continuous rated current (A),
-        13  number of cells
-        14  number of cells per module,
-        15  cell mass (kg),
-        16  cell mass per module (kg),
-        17  cell volume (L),
-        18  cell module volume (L),
-        19  pack approx DCIR (ohm),
-        20  pack power efficiency approximation
-        21  number of cells in each module
-        22  number of parallel cells in pack
-        23  number of cell modules
-        '''
-        return self.data_to_write[
-            index]  # This can be used to check individual parameters externally so invalid layouts can be discarded
+        5   nominal pack energy (kWh),
+        6   maximum pack energy (kWh),
+        7   continuous rated current (A),
+        8   nominal power output (kW) - from nominal voltage and continuous rated current,
 
-    def write_to_file(self):
+        9   nominal module voltage (V),
+        10  maximum module voltage (V),
+        11  nominal module energy (kWh),
+        12  maximum module energy (kWh),
+        13  number of modules (#),
+        14  series cells per module (#),
+        15  parallel cells per module (#),
+
+        16  number of cells (#)
+        17  cell mass (kg),
+        18  cell mass per module (kg),
+        19  cell volume (L),
+        20  cell module volume (L),
+        21  pack approx DCIR (ohm),
+        22  pack power efficiency approximation
+        23  approximated connector mass (kg)
+        '''
+        return self.data_to_write[index]  # This can be used to check individual parameters externally so invalid layouts can be discarded
+
+    def write_to_file(self): # Writes the calculated configuration parmaeters to output file if deemed acceptable
         print(f'Writing to file: {self.data_to_write[1]}')
         with open(self.output_file, mode="a", newline="") as f:
             writer = csv.writer(f)
@@ -167,34 +180,36 @@ class Pack_Param_Calc:
 
         busbar_width_mm = 12  # assumption
         busbar_length_mm = 45  # assumption
-        required_area_mm2 = 0.3723 * I_requirement - 15.359  # taken from curve fitting busbar ampacity chart
+
+        # Equation derived from taking copper busbar data and fitting a LINE to map between area and ampacity - weak assumption.
+        required_area_mm2 = 0.3306*I_requirement - 26.244  # taken from curve fitting busbar ampacity chart
+
+        print(f'I_requirement = {I_requirement}')
+        print(f'Required area = {required_area_mm2}')
 
         # Calculate the required busbar height
         busbar_height_mm = required_area_mm2 / busbar_width_mm
-
         # Approximate volume of single busbar
         single_busbar_volume_mm3 = busbar_width_mm * busbar_length_mm * busbar_height_mm
+
 
         # Approximate mass of busbars
         copper_density_kg_per_mm3 = 8.96 * (10 ** -6)
         single_busbar_mass_kg = single_busbar_volume_mm3 * copper_density_kg_per_mm3
 
         # Required number of busbars = (series cells per module - 1) * number of modules
-        number_busbars = (self.mod_num_cells - 1) * self.num_modules
+        number_busbars = (self.series_cells_per_module - 1) * self.num_modules
+
+        print(f'Number of busbars: {number_busbars}')
 
         total_busbar_mass = number_busbars * single_busbar_mass_kg
 
+        print(f'Total busbar mass: {total_busbar_mass}')
+
+        self.TS_connection_mass_kg = total_busbar_mass
+
         # PERIPHERAL TRACTIVE SYSTEM CONNECTION MASS CALCULATIONS
 
-        '''
-        generates a predicted mass of copper busbars for the pack configration, based on key assumptions:
-        * relationship between area and ampacity is linear and follows calculated regression
-        * width of busbars given to be 12mm - based on approximation that the busbars will be connected to the cell strips through M8 bolts. 
-
-        for the volume calculations the assumptions are: 
-        length of the busbars will be = 2.1x diameter of cell - so it spans both
-        * cell width = 21.55mm
-        '''
 
 
 class FilterConfigurations:
@@ -204,11 +219,11 @@ class FilterConfigurations:
 
     def FSUK_reg_filt(self):
         # checking against FSUK EV5.3.2
-        if self.pack_params.return_pack_parameter(6) > 120: self.feasible = False  # Max segment voltage = 120V
+        if self.pack_params.return_pack_parameter(10) > 120: self.feasible = False  # Max segment voltage = 120V
         if self.pack_params.return_pack_parameter(
-            10) > 6 / 3.6: self.feasible = False  # Max segment energy = 6MJ (1.66666kWh)
+            12) > 6 / 3.6: self.feasible = False  # Max segment energy = 6MJ (1.66666kWh)
         if self.pack_params.return_pack_parameter(
-            16) > 12: self.feasible = False  # Max segment mass = 12kg - this is for the full segment so total cell mass alone cant even be close to this
+            18) > 12: self.feasible = False  # Max segment mass = 12kg - this is for the full segment so total cell mass alone cant even be close to this
         # checking against FSUK EV4.1.1
         if self.pack_params.return_pack_parameter(4) > 600: self.feasible = False
 
@@ -219,10 +234,6 @@ class FilterConfigurations:
 
     def return_check(self):
         return self.feasible
-
-
-class GenerateCombinations
-
 
 def calc(cell_name, v_target, v_tolerance, e_target_kWh, e_tolerance_kWh):
     potential_configs = []  # To be populated by (num_series, num_parallel, num_segments)
