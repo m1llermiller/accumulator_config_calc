@@ -39,7 +39,9 @@ output_header = [
     "Cell Volume per Module (L)",
     "Pack DCIR (Ohm)",
     "Approximated Power Efficiency (%)",
-    "Approximated Connector Mass (kg)"
+    "Approximated Connector Mass (kg)",
+    "Required Busbar Height (mm)",
+    "Required Busbar Width (mm)",
 ]
 
 with open(output_file, mode="w", newline="") as f:
@@ -132,7 +134,9 @@ class Pack_Param_Calc:
             self.mod_volume,
             self.pack_DCIR,
             self.pack_efficiency,
-            self.TS_connection_mass_kg]
+            self.TS_connection_mass_kg,
+            self.busbar_height_mm,
+            self.busbar_width_mm]
 
     def return_pack_parameter(self, index):
         '''
@@ -163,6 +167,8 @@ class Pack_Param_Calc:
         21  pack approx DCIR (ohm),
         22  pack power efficiency approximation
         23  approximated connector mass (kg)
+        24  required busbar height
+        25  required busbar width
         '''
         return self.data_to_write[index]  # This can be used to check individual parameters externally so invalid layouts can be discarded
 
@@ -178,7 +184,7 @@ class Pack_Param_Calc:
         # p_target is the highest required power for operation - this will be assumed to be 80kW unless otherwise calculated by VD.
         I_requirement = p_target_kw * 1000 / self.nom_pack_v
 
-        busbar_width_mm = 12  # assumption
+        self.busbar_width_mm = 12  # assumption
         busbar_length_mm = 45  # assumption
 
         # Equation derived from taking copper busbar data and fitting a LINE to map between area and ampacity - weak assumption.
@@ -188,9 +194,9 @@ class Pack_Param_Calc:
         print(f'Required area = {required_area_mm2}')
 
         # Calculate the required busbar height
-        busbar_height_mm = required_area_mm2 / busbar_width_mm
+        self.busbar_height_mm = required_area_mm2 / self.busbar_width_mm
         # Approximate volume of single busbar
-        single_busbar_volume_mm3 = busbar_width_mm * busbar_length_mm * busbar_height_mm
+        single_busbar_volume_mm3 = self.busbar_width_mm * busbar_length_mm * self.busbar_height_mm
 
 
         # Approximate mass of busbars
