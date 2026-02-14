@@ -213,9 +213,9 @@ class Pack_Param_Calc:
 
         print(f'Total busbar mass: {total_busbar_mass}')
 
-        # PERIPHERAL TRACTIVE SYSTEM CONNECTION MASS CALCULATIONS
+        # PERIPHERAL TRACTIVE SYSTEM CONNECTION MASS CALCULATIONS - very rough estimates
 
-        # Calculate the maintenance plug / connector mass
+        # Calculate the maintenance plug mass
         connector_table = [
             (200, 45.11),
             (250, 65.436),
@@ -224,10 +224,27 @@ class Pack_Param_Calc:
         ]           # Created from current ratings and mass listed for AMPHENOL RADLOCK connectors on RS
         connector_table.sort(key=lambda x: x[0])
 
+        # Very rough cable mass approximation based on Elandcables unshielded options - omitting shielded cables and using unshielded values in their place (might come back and improve this)
+        DC_cable_table = [ # Ampacity, mass (g) per meter
+            (260, 265),
+            (330, 350),
+            (420, 507),
+            (525, 715)
+        ]
+        DC_cable_table.sort(key=lambda x: x[0])
+
         for rated_current, mass in connector_table:
             if self.cont_pack_i <= rated_current:
                 maintenance_plug_mass = mass
                 break
+
+        for rated_current, mass in DC_cable_table:
+            if self.cont_pack_i <= rated_current:
+                cable_mass_per_length = mass
+                break
+
+        length_cables = 4 #approx 4m (rough measurements from mCAD)
+        cable_mass = float(length_cables * cable_mass_per_length/1000)
 
         num_maintenance_plug = 2*int(self.num_modules)
         plug_mass = num_maintenance_plug * maintenance_plug_mass/1000 #kg conversion
@@ -239,8 +256,9 @@ class Pack_Param_Calc:
         >   Calculate the main connector mass
         >  Calculate HV DC cable mass
             - Assuming there is 4m of HVDC
+            omitting main connector and further calculations requiring AMPHENOL products because they dont list the mass on their datasheets !!!
         '''
-        self.TS_connection_mass_kg = total_busbar_mass + plug_mass #mc_mass + HVDC_cable_mass + HVAC_cable_mass
+        self.TS_connection_mass_kg = total_busbar_mass + plug_mass + cable_mass #mc_mass + HVAC_cable_mass
 
 
 
