@@ -19,7 +19,7 @@ output_header = [
     "Pack Capacity (Ah)",
     "Nominal Pack Voltage (V)",
     "Max Pack Voltage (V)",
-    "Nominal Pack Energy (kWh)",
+    "Nominal Pack Energy (kJ)",
     "Max Pack Energy (kWh)",
     "Cont Pack Current (A)",
     "Nominal Power (kW)",
