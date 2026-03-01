@@ -213,14 +213,15 @@ class Pack_Param_Calc:
 
         print(f'Total busbar mass: {total_busbar_mass}')
 
-        # PERIPHERAL TRACTIVE SYSTEM CONNECTION MASS CALCULATIONS - very rough estimates
+        # PERIPHERAL TRACTIVE SYSTEM CONNECTION MASS CALCULATIONS - very rough estimates - WEAK CODE - will crash if pack made is too big
 
         # Calculate the maintenance plug mass
         connector_table = [
             (200, 45.11),
             (250, 65.436),
             (300, 81.151),
-            (400, 104.113)
+            (400, 104.113),
+            (600,150)   # made up this value
         ]           # Created from current ratings and mass listed for AMPHENOL RADLOCK connectors on RS
         connector_table.sort(key=lambda x: x[0])
 
@@ -229,14 +230,16 @@ class Pack_Param_Calc:
             (260, 265),
             (330, 350),
             (420, 507),
-            (525, 715)
+            (525, 715),
+            (640,1100)
         ]
-        DC_cable_table.sort(key=lambda x: x[0])
 
+        DC_cable_table.sort(key=lambda x: x[0])
         for rated_current, mass in connector_table:
             if self.cont_pack_i <= rated_current:
                 maintenance_plug_mass = mass
                 break
+
 
         for rated_current, mass in DC_cable_table:
             if self.cont_pack_i <= rated_current:
