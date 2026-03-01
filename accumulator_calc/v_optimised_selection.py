@@ -12,11 +12,12 @@ def assign_match_score(CO_params, VD_params):
     else:
         ratio_score = abs(ratio_co - ratio_vd) / ratio_co
 
+    print(f'ratio_score: {ratio_score}')
 
     # higher score = better match in voltage
     voltage_diff = abs(voltage_vd - voltage_co) / max(voltage_vd, voltage_co) # fractional difference between the two numbers
     voltage_score = 1 - voltage_diff
-
+    print(f'voltage_score: {voltage_score}')
     match_score = ratio_score * voltage_score # approximation method - higher score >> better match
 
     return match_score
@@ -24,7 +25,7 @@ def assign_match_score(CO_params, VD_params):
 def main():
 
     filepath_VD = 'UGR_cell_selection_optimisations.csv'
-    filepath_CO = 'ConfigOptions_1508.csv'
+    filepath_CO = 'ConfigOptions_1130.csv'
 
     timestamp = datetime.now().strftime("%H%M")
     output_file = f'Pack_Config_Optimisation_Ratings_{timestamp}.csv'
