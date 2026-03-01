@@ -48,6 +48,67 @@ def assign_match_score(CO_params, VD_params):
 '''
 
 def main():
+    # Load config files
+    filepath_VD = 'UGR_cell_selection_optimisations.csv'
+    filepath_CO = 'ConfigOptions_1130.csv'
+
+    # Setup output file for performance comparison
+    timestamp = datetime.now().strftime("%H%M")  # Unique identifier output files
+    output_file = f'Pack_Config_Optimisation_Ratings_{timestamp}.csv'
+
+    rankings = []
+    voltages_vd = []
+    ratios_vd = []
+
+    with open(filepath_VD) as vd_file_object:
+        header = next(vd_file_object)  # skip header row
+        reader_vd = csv.reader(vd_file_object, delimiter=',')
+        for ranking in reader_vd:
+            rankings.append(ranking[0])
+            voltages_vd.append(ranking[4])
+            ratios_vd.append(ranking[6])
+
+    header = rankings # Setup header row
+    header.insert(0, "Config Name")
+
+    with open(output_file, mode="w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(header)
+
+
+    with open(filepath_VD) as vd_file_object:
+        header = next(vd_file_object) # check to see what this returns
+        reader_vd = csv.reader(vd_file_object, delimiter=',')
+        for ranking in reader_vd:
+            ranking_vd = ranking[0]
+            voltage_vd = ranking[4]
+            ratio_vd = ranking[6]
+            VD_params = [ranking_vd, voltage_vd, ratio_vd]
+
+            with open(filepath_CO) as co_file_object:
+                header = next(co_file_object)
+                reader_co = csv.reader(co_file_object, delimiter=',')
+                for config in reader_co:
+                    config_CO = config[1]
+                    voltage_co = config[3]
+                    ratio_co = config[25]
+                    CO_params = [config_CO, voltage_co, ratio_co]
+
+
+            # Build output datafile
+            score_row = [ranking_vd,]
+
+
+
+
+
+
+
+
+# needs to be some sort of inside and outside loop.
+
+
+''''
     # Load cell selection table
     filepath_VD = 'UGR_cell_selection_optimisations.csv'
     filepath_CO = 'ConfigOptions_1130.csv'
@@ -81,6 +142,4 @@ def main():
         writer = csv.writer(f)
         writer.writerow(output_header)
 
-
-
-# needs to be some sort of inside and outside loop.
+'''
