@@ -52,7 +52,6 @@ def main():
             voltages_vd.append(row[4])   # Voltage column
             ratios_vd.append(row[6])     # V/I Ratio column
 
-    # ----- Write Output -----
     with open(output_file, mode="w", newline="") as f:
 
         writer = csv.writer(f)
@@ -60,7 +59,6 @@ def main():
         header = ["Config Name"] + rankings_vd
         writer.writerow(header)
 
-        # ----- Load Config Options -----
         with open(filepath_CO) as co_file_object:
 
             next(co_file_object)
